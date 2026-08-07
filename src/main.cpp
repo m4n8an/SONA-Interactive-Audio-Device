@@ -1,7 +1,9 @@
 #include <M5Unified.h>
 #include <math.h>
+#include <string.h>
 #include <Wire.h>
 #include <MFRC522_I2C.h>
+#include "logo.h"
 
 // ═══════════════════════════════════════════════════
 //  SONA – Music Player for M5StickS3
@@ -257,32 +259,78 @@ static void updateMotion() {
 }
 
 // ═══════════════════════════════════════════════════
-//  Idle screen  –  minimal SONA
+//  Tiny 3x5 pixel font  –  mirrors the web edition
+// ═══════════════════════════════════════════════════
+struct PixChar { char c; uint16_t b; };
+static const PixChar PIX[] = {
+  {'A',0b111101111101101},{'B',0b110101110101110},{'C',0b111100100100111},
+  {'D',0b110101101101110},{'E',0b111100110100111},{'F',0b111100110100100},
+  {'G',0b111100101101111},{'H',0b101101111101101},{'I',0b111010010010111},
+  {'J',0b001001001101111},{'K',0b101101110101101},{'L',0b100100100100111},
+  {'M',0b101111111101101},{'N',0b101111111111101},{'O',0b111101101101111},
+  {'P',0b110101110100100},{'Q',0b111101101110011},{'R',0b110101110101101},
+  {'S',0b111100111001111},{'T',0b111010010010010},{'U',0b101101101101111},
+  {'V',0b101101101101010},{'W',0b101101111111101},{'X',0b101101010101101},
+  {'Y',0b101101010010010},{'Z',0b111001010100111},
+  {'0',0b111101101101111},{'1',0b010110010010111},{'2',0b111001111100111},
+  {'3',0b111001011001111},{'4',0b101101111001001},{'5',0b111100111001111},
+  {'6',0b111100111101111},{'7',0b111001010010010},{'8',0b111101111101111},
+  {'9',0b111101111001111},
+  {'.',0b000000000000010},{':',0b000010000010000},{'x',0b000101010101000},
+  {'<',0b000010111010000},
+};
+static int pixWidth(const char* t, int s) { return (int)strlen(t) * 4 * s; }
+template <typename D>
+static void drawPixText(D& dst, const char* t, int x, int y, int s, uint16_t col) {
+  for (const char* p = t; *p; p++) {
+    char ch = *p;
+    if (ch >= 'a' && ch <= 'z') ch -= 32;        // uppercase
+    uint16_t b = 0;
+    if (ch != ' ') {
+      for (const PixChar& pc : PIX) if (pc.c == ch) { b = pc.b; break; }
+    }
+    if (b == 0) { x += 4 * s; continue; }        // space / unknown
+    for (int r = 0; r < 5; r++)
+      for (int c = 0; c < 3; c++)
+        if (b & (1 << (14 - (r * 3 + c))))
+          dst.fillRect(x + c * s, y + r * s, s, s, col);
+    x += 4 * s;
+  }
+}
+template <typename D>
+static void drawLogo(D& dst, int x, int y) {
+  for (int yy = 0; yy < LOGO_H; yy++)
+    for (int xx = 0; xx < LOGO_W; xx++) {
+      uint16_t c = pgm_read_word(&LOGO[yy * LOGO_W + xx]);
+      if (c) dst.drawPixel(x + xx, y + yy, c);
+    }
+}
+static void drawCapsule(M5Canvas& dst, int cx, int cy, int w, int h,
+                        const char* text, uint16_t col) {
+  dst.fillRoundRect(cx, cy, w, h, h / 2, C_GLASS);
+  dst.drawRoundRect(cx, cy, w, h, h / 2, C_MAIN);
+  dst.setTextSize(1);
+  dst.setTextColor(col, C_GLASS);
+  dst.setCursor(cx + (w - dst.textWidth(text)) / 2, cy + (h - 8) / 2);
+  dst.print(text);
+}
+
+// ═══════════════════════════════════════════════════
+//  Idle screen  –  dark + banner logo + pixel hint
 // ═══════════════════════════════════════════════════
 static void drawIdle() {
   int cx = M5.Display.width() / 2;    // 67 (portrait 135x240)
-  M5.Display.fillScreen(C_BLACK);
+  M5.Display.fillScreen(0x0021);      // near-black #04070B
 
-  // ── SONA (centred vertically) ──
-  M5.Display.setTextSize(4);
-  M5.Display.setTextColor(C_WHITE, C_BLACK);
-  M5.Display.setCursor(cx - 48, 96);
-  M5.Display.print("SONA");
+  // whisper of cool glow behind the logo
+  M5.Display.fillCircle(cx, 96, 26, 0x08A3);
 
-  // ── ™ superscript (top-right of the "A") ──
-  M5.Display.setTextSize(1);
-  M5.Display.setTextColor(C_MAIN, C_BLACK);
-  M5.Display.setCursor(cx - 48 + 92, 88);
-  M5.Display.print("TM");
+  // banner logo, centred
+  drawLogo(M5.Display, cx - LOGO_W / 2, 96 - LOGO_H / 2);
 
-  // ── thin blue line ──
-  M5.Display.drawFastHLine(cx - 30, 132, 60, C_MAIN);
-
-  // ── hint ──
-  M5.Display.setTextSize(1);
-  M5.Display.setTextColor(C_DIM, C_BLACK);
-  M5.Display.setCursor(cx - 24, 150);
-  M5.Display.print("Press A");
+  // pixel hint
+  drawPixText(M5.Display, "Tap to start",
+              cx - pixWidth("Tap to start", 1) / 2, 210, 1, C_DIM);
 }
 
 // ═══════════════════════════════════════════════════
@@ -334,46 +382,29 @@ static void drawAurora(M5Canvas& dst, unsigned long t) {
 static void drawHUD(M5Canvas& dst) {
   int w = dst.width(), h = dst.height();
 
-  // ── speed badge (top right, redesigned pill) ──
+  // top-left back pill (decorative — long-press A actually returns)
+  drawCapsule(dst, 3, 3, 24, 12, "<", C_WHITE);
+
+  // top-right speed pill (same size & style)
   char sp[8]; sprintf(sp, "x%.1f", (double)gBpm);
-  int sw = 8 * (int)strlen(sp) + 10;   // text width + padding
-  int bh = 14;
-  int bx = w - sw - 4;
-  int by = 4;
-
-  // colour by speed: dark = slow, main = normal, bright = fast
-  uint16_t bg;
-  if      (gBpm < 0.7f) bg = C_MAIN_DK;
-  else if (gBpm > 1.5f) bg = C_MAIN_LT;
-  else                  bg = C_MAIN;
-
-  dst.fillRoundRect(bx, by, sw, bh, bh / 2, bg);
-  dst.setTextSize(1);
-  dst.setTextColor(C_BLACK, bg);
-  dst.setCursor(bx + 5, by + 3);
-  dst.print(sp);
-
-  // vibrator status – bottom left, above SONA
-  dst.setTextSize(1);
-  dst.setTextColor(gVibOn ? C_MAIN : C_DIM, C_BLACK);
-  dst.setCursor(4, h - 21);
-  dst.print(gVibOn ? "VIB ON" : "VIB OFF");
-
-  // brand – bottom left (SONA)
-  dst.setTextSize(1);
-  dst.setTextColor(C_MAIN_LT, C_BLACK);
-  dst.setCursor(4, h - 10);
-  dst.print("SONA");
+  drawCapsule(dst, w - 3 - 24, 3, 24, 12, sp, C_WHITE);
 
   // play/pause dot – bottom right
-  dst.fillCircle(w - 8, h - 7, 3, (gSt == ST_PLAYING) ? C_GREEN : C_DIM);
+  dst.fillCircle(w - 7, h - 8, 2, (gSt == ST_PLAYING) ? C_GREEN : C_DIM);
 
-  // ── "Press A to play" hint (shown when stopped OR paused) ──
+  // song title – uppercase, top centre
+  char t[16];
+  strncpy(t, SONGS[gSongIdx].title, 15); t[15] = 0;
+  for (char* q = t; *q; q++) if (*q >= 'a' && *q <= 'z') *q -= 32;
+  dst.setTextSize(1);
+  dst.setTextColor(C_MUTED, C_BLACK);
+  dst.setCursor((w - dst.textWidth(t)) / 2, 3);
+  dst.print(t);
+
+  // pixel "Tap to play" (stopped or paused)
   if (gSt != ST_PLAYING) {
-    dst.setTextSize(1);
-    dst.setTextColor(C_MAIN, C_BLACK);
-    dst.setCursor(w / 2 - 44, h / 2 + 30);
-    dst.print("Press A to play");
+    drawPixText(dst, "Tap to play",
+                (w - pixWidth("Tap to play", 1)) / 2, h / 2 + 40, 1, C_MAIN);
   }
 }
 
