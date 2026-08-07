@@ -322,9 +322,6 @@ static void drawIdle() {
   int cx = gCanvas.width() / 2;       // 67 (portrait 135x240)
   gCanvas.fillScreen(0x0021);         // near-black #04070B
 
-  // whisper of cool glow behind the logo
-  gCanvas.fillCircle(cx, 96, 26, 0x08A3);
-
   // ── original text logo: SONA + ™ + blue line ──
   gCanvas.setTextSize(4);
   gCanvas.setTextColor(C_WHITE, C_BLACK);
