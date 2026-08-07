@@ -325,8 +325,16 @@ static void drawIdle() {
   // whisper of cool glow behind the logo
   gCanvas.fillCircle(cx, 96, 26, 0x08A3);
 
-  // banner logo, centred
-  drawLogo(gCanvas, cx - LOGO_W / 2, 96 - LOGO_H / 2);
+  // ── original text logo: SONA + ™ + blue line ──
+  gCanvas.setTextSize(4);
+  gCanvas.setTextColor(C_WHITE, C_BLACK);
+  gCanvas.setCursor(cx - 48, 96);
+  gCanvas.print("SONA");
+  gCanvas.setTextSize(1);
+  gCanvas.setTextColor(C_MAIN, C_BLACK);
+  gCanvas.setCursor(cx - 48 + 92, 88);
+  gCanvas.print("TM");
+  gCanvas.drawFastHLine(cx - 30, 132, 60, C_MAIN);
 
   // pixel hint
   drawPixText(gCanvas, "Tap to start",
