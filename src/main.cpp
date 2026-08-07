@@ -319,18 +319,20 @@ static void drawCapsule(M5Canvas& dst, int cx, int cy, int w, int h,
 //  Idle screen  –  dark + banner logo + pixel hint
 // ═══════════════════════════════════════════════════
 static void drawIdle() {
-  int cx = M5.Display.width() / 2;    // 67 (portrait 135x240)
-  M5.Display.fillScreen(0x0021);      // near-black #04070B
+  int cx = gCanvas.width() / 2;       // 67 (portrait 135x240)
+  gCanvas.fillScreen(0x0021);         // near-black #04070B
 
   // whisper of cool glow behind the logo
-  M5.Display.fillCircle(cx, 96, 26, 0x08A3);
+  gCanvas.fillCircle(cx, 96, 26, 0x08A3);
 
   // banner logo, centred
-  drawLogo(M5.Display, cx - LOGO_W / 2, 96 - LOGO_H / 2);
+  drawLogo(gCanvas, cx - LOGO_W / 2, 96 - LOGO_H / 2);
 
   // pixel hint
-  drawPixText(M5.Display, "Tap to start",
+  drawPixText(gCanvas, "Tap to start",
               cx - pixWidth("Tap to start", 1) / 2, 210, 1, C_DIM);
+
+  gCanvas.pushSprite(0, 0);
 }
 
 // ═══════════════════════════════════════════════════
