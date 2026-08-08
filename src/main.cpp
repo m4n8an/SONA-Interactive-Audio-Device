@@ -446,7 +446,7 @@ static void updateVibrator() {
       if (dur > 0) {
         float phase = (float)dt / (float)dur;         // 0..1 into the note
         if (phase < 0.0f) phase = 0.0f; else if (phase > 1.0f) phase = 1.0f;
-        const float attack = 0.08f;                   // very quick attack
+        const float attack = 0.04f;                   // snappier attack → hand-in-glove
         float env = (phase < attack)
                   ? phase / attack                     // rise to peak
                   : 1.0f - (phase - attack) / (1.0f - attack) * 0.35f;  // decay → 65%
@@ -458,11 +458,24 @@ static void updateVibrator() {
     }
     // rests → target stays 0, motor winds down
   }
-  // follow the envelope: fast up, slower decay (stronger feel)
-  float k = (target > gVibDutyF) ? 0.7f : 0.28f;
+  // fast & responsive smoothing (up AND down) — feels linear, not laggy
+  float k = (target > gVibDutyF) ? 0.90f : 0.55f;
   gVibDutyF += (target - gVibDutyF) * k;
-  if (gVibDutyF < 1.0f) gVibDutyF = 0.0f;
-  ledcWrite(VIB_PWM_CH, (uint32_t)gVibDutyF);
+  if (gVibDutyF < 2.0f) gVibDutyF = 0.0f;
+
+  // dead-zone compensation → perceptually LINEAR:
+  // the motor stalls below ~VIB_MIN duty, so remap 0..1 → VIB_MIN..255
+  // (weak notes still start spinning smoothly, strong notes saturate cleanly)
+  const float VIB_MIN_F = 38.0f;
+  float norm = gVibDutyF / 255.0f;
+  uint32_t duty;
+  if (norm < 0.05f) {
+    duty = 0;
+  } else {
+    duty = (uint32_t)(VIB_MIN_F + norm * (255.0f - VIB_MIN_F));
+    if (duty > 255) duty = 255;
+  }
+  ledcWrite(VIB_PWM_CH, duty);
 }
 
 static void vibratorOff() {
